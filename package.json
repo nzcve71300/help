@@ -1,0 +1,40 @@
+{
+  "name": "seedy-discord-bot",
+  "version": "1.0.0",
+  "description": "Seedy - A comprehensive Discord bot with games, moderation, and AI features",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "deploy": "node deploy-commands.js",
+    "test": "jest"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "games",
+    "moderation",
+    "ai"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nzcve71300/seedyy.git"
+  },
+  "homepage": "https://github.com/nzcve71300/seedyy#readme",
+  "dependencies": {
+    "bad-words": "^3.0.4",
+    "discord.js": "^14.22.1",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3",
+    "sqlite3": "^5.1.6"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
