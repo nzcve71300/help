@@ -9,6 +9,7 @@ const ModerationService = require('./services/ModerationService');
 const GameManager = require('./services/GameManager');
 const SurveyManager = require('./services/SurveyManager');
 const DatabaseService = require('./services/DatabaseService');
+const ServerService = require('./services/ServerService');
 
 class SeedyBot {
     constructor() {
@@ -31,6 +32,7 @@ class SeedyBot {
         this.moderation = new ModerationService();
         this.gameManager = new GameManager(this.economy);
         this.surveyManager = new SurveyManager(this.database);
+        this.serverService = new ServerService(this.database);
         // AI Service removed
 
         // Channel IDs
@@ -250,6 +252,8 @@ class SeedyBot {
                 await this.surveyManager.handleButton(interaction);
             } else if (interaction.isModalSubmit()) {
                 await this.surveyManager.handleModal(interaction, this);
+            } else if (interaction.isStringSelectMenu()) {
+                await this.handleServerSelectMenu(interaction);
             }
         });
     }
@@ -461,6 +465,125 @@ class SeedyBot {
             console.error(`Error executing slash command ${interaction.commandName}:`, error);
             await interaction.reply({
                 content: 'There was an error executing that command!',
+                ephemeral: true
+            });
+        }
+    }
+
+    async handleServerSelectMenu(interaction) {
+        try {
+            const customId = interaction.customId;
+            const selectedServer = interaction.values[0];
+
+            if (customId === 'server_info_select') {
+                // Handle server info selection from send-server-msg
+                const serverData = this.serverService.getServer(selectedServer);
+                
+                if (!serverData) {
+                    return interaction.reply({
+                        content: '❌ Server not found!',
+                        ephemeral: true
+                    });
+                }
+
+                const embed = this.serverService.createServerEmbed(serverData, 0x00ff00);
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+
+            } else if (customId === 'delete_server_select') {
+                // Handle server deletion
+                const serverData = this.serverService.getServer(selectedServer);
+                
+                if (!serverData) {
+                    return interaction.reply({
+                        content: '❌ Server not found!',
+                        ephemeral: true
+                    });
+                }
+
+                await this.serverService.deleteServer(selectedServer);
+
+                const embed = new EmbedBuilder()
+                    .setTitle('✅ Server Deleted Successfully!')
+                    .setDescription(`**${selectedServer}** has been removed from the server database.`)
+                    .setColor(0x00ff00)
+                    .setTimestamp()
+                    .setFooter({ 
+                        text: 'Server Management • Powered by Seedy', 
+                        iconURL: 'https://i.imgur.com/ieP1fd5.jpeg' 
+                    });
+
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+
+            } else if (customId.startsWith('edit_server_select_')) {
+                // Handle server editing
+                const updatesString = customId.replace('edit_server_select_', '');
+                const updates = JSON.parse(updatesString);
+                
+                const serverData = this.serverService.getServer(selectedServer);
+                
+                if (!serverData) {
+                    return interaction.reply({
+                        content: '❌ Server not found!',
+                        ephemeral: true
+                    });
+                }
+
+                const updatedServer = await this.serverService.editServer(selectedServer, updates);
+
+                const embed = new EmbedBuilder()
+                    .setTitle('✅ Server Updated Successfully!')
+                    .setDescription(`**${updatedServer.server_name}** has been updated in the server database.`)
+                    .setColor(0x00ff00)
+                    .addFields(
+                        {
+                            name: '**SERVER ID**',
+                            value: updatedServer.server_id,
+                            inline: false
+                        },
+                        {
+                            name: '**SERVER TYPE**',
+                            value: updatedServer.server_type,
+                            inline: false
+                        },
+                        {
+                            name: '**GAME TYPE**',
+                            value: updatedServer.game_type,
+                            inline: false
+                        },
+                        {
+                            name: '**TEAM SIZE**',
+                            value: updatedServer.team_size,
+                            inline: false
+                        },
+                        {
+                            name: '**LAST WIPE**',
+                            value: updatedServer.last_wipe,
+                            inline: false
+                        },
+                        {
+                            name: '**NEXT WIPE**',
+                            value: updatedServer.next_wipe,
+                            inline: false
+                        },
+                        {
+                            name: '**BP WIPE**',
+                            value: updatedServer.bp_wipe,
+                            inline: false
+                        }
+                    )
+                    .setTimestamp()
+                    .setFooter({ 
+                        text: 'Server Management • Powered by Seedy', 
+                        iconURL: 'https://i.imgur.com/ieP1fd5.jpeg' 
+                    });
+
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+
+        } catch (error) {
+            console.error('Error handling server select menu:', error);
+            await interaction.reply({
+                content: '❌ There was an error processing your selection!',
                 ephemeral: true
             });
         }
