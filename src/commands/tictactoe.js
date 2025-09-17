@@ -42,8 +42,9 @@ module.exports = {
                 lastActivity: Date.now()
             };
 
-            // Store game state
-            bot.gameManager.activeGames.set(interaction.id, gameState);
+            // Store game state with message ID for button handling
+            const messageId = `ttt_${interaction.id}`;
+            bot.gameManager.activeGames.set(messageId, gameState);
 
             // Create game embed
             const embed = new EmbedBuilder()
@@ -63,7 +64,7 @@ module.exports = {
                 });
 
             // Create game buttons
-            const buttons = this.createGameButtons(gameState.board);
+            const buttons = this.createGameButtons(gameState.board, interaction.id);
 
             await interaction.reply({ 
                 embeds: [embed], 
@@ -95,7 +96,7 @@ module.exports = {
 \`\`\``;
     },
 
-    createGameButtons(board) {
+    createGameButtons(board, interactionId) {
         const rows = [];
         
         for (let i = 0; i < 3; i++) {
@@ -103,7 +104,7 @@ module.exports = {
             for (let j = 0; j < 3; j++) {
                 const index = i * 3 + j;
                 const button = new ButtonBuilder()
-                    .setCustomId(`ttt_${index}`)
+                    .setCustomId(`ttt_${interactionId}_${index}`)
                     .setLabel(board[index] === '' ? `${index + 1}` : (board[index] === 'X' ? '❌' : '⭕'))
                     .setStyle(board[index] === '' ? ButtonStyle.Secondary : ButtonStyle.Primary)
                     .setDisabled(board[index] !== '');

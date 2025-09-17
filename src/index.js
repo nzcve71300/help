@@ -618,11 +618,20 @@ class SeedyBot {
             let gameState = null;
             let gameId = null;
 
-            // Method 1: Try message ID
-            gameId = interaction.message.id;
-            gameState = this.gameManager.activeGames.get(gameId);
+            // Method 1: Try to find game by custom ID pattern
+            const customId = interaction.customId;
+            if (customId.startsWith('ttt_')) {
+                // For TicTacToe, look for the game with the interaction ID
+                const interactionId = customId.split('_')[1];
+                gameId = `ttt_${interactionId}`;
+                gameState = this.gameManager.activeGames.get(gameId);
+            } else {
+                // For other games, try message ID
+                gameId = interaction.message.id;
+                gameState = this.gameManager.activeGames.get(gameId);
+            }
 
-            // Method 2: Try to find by user ID if message ID fails
+            // Method 2: Try to find by user ID if direct lookup fails
             if (!gameState) {
                 for (const [id, state] of this.gameManager.activeGames.entries()) {
                     if (state.userId === interaction.user.id && !state.gameOver) {
@@ -676,7 +685,7 @@ class SeedyBot {
     }
 
     async handleTicTacToeButton(interaction, gameState) {
-        const position = parseInt(interaction.customId.split('_')[1]);
+        const position = parseInt(interaction.customId.split('_')[2]); // ttt_interactionId_position
         
         if (gameState.board[position] !== '') {
             return interaction.reply({
@@ -812,7 +821,9 @@ class SeedyBot {
             .setTimestamp()
             .setFooter({ text: 'Click a button to make your move! • Powered by Seedy' });
 
-        const buttons = this.createTicTacToeButtons(gameState.board);
+        // Extract interaction ID from the game ID
+        const interactionId = gameId.replace('ttt_', '');
+        const buttons = this.createTicTacToeButtons(gameState.board, interactionId);
         await interaction.update({ embeds: [embed], components: buttons });
     }
 
@@ -831,7 +842,7 @@ class SeedyBot {
 \`\`\``;
     }
 
-    createTicTacToeButtons(board) {
+    createTicTacToeButtons(board, interactionId) {
         const rows = [];
         
         for (let i = 0; i < 3; i++) {
@@ -839,7 +850,7 @@ class SeedyBot {
             for (let j = 0; j < 3; j++) {
                 const index = i * 3 + j;
                 const button = new ButtonBuilder()
-                    .setCustomId(`ttt_${index}`)
+                    .setCustomId(`ttt_${interactionId}_${index}`)
                     .setLabel(board[index] === '' ? `${index + 1}` : (board[index] === 'X' ? '❌' : '⭕'))
                     .setStyle(board[index] === '' ? ButtonStyle.Secondary : ButtonStyle.Primary)
                     .setDisabled(board[index] !== '');
@@ -854,8 +865,56 @@ class SeedyBot {
 
     // Placeholder methods for other games (to be implemented)
     async handleConnect4Button(interaction, gameState) {
-        // Implementation for Connect 4
-        await interaction.reply({ content: 'Connect 4 button handling - Coming soon!', ephemeral: true });
+        const column = parseInt(interaction.customId.split('_')[1]);
+        
+        // Basic Connect 4 logic - find lowest empty spot in column
+        let row = -1;
+        for (let i = 5; i >= 0; i--) {
+            if (!gameState.board[i][column]) {
+                row = i;
+                break;
+            }
+        }
+        
+        if (row === -1) {
+            return interaction.reply({
+                content: '❌ That column is full!',
+                ephemeral: true
+            });
+        }
+        
+        // Place user piece
+        gameState.board[row][column] = 'R'; // Red for user
+        
+        // Check for win
+        if (this.checkConnect4Win(gameState.board, row, column, 'R')) {
+            await this.endConnect4Game(interaction, gameState, 'user');
+            return;
+        }
+        
+        // Bot move (simple AI)
+        const botColumn = this.getConnect4BotMove(gameState.board);
+        if (botColumn !== -1) {
+            let botRow = -1;
+            for (let i = 5; i >= 0; i--) {
+                if (!gameState.board[i][botColumn]) {
+                    botRow = i;
+                    break;
+                }
+            }
+            
+            if (botRow !== -1) {
+                gameState.board[botRow][botColumn] = 'Y'; // Yellow for bot
+                
+                if (this.checkConnect4Win(gameState.board, botRow, botColumn, 'Y')) {
+                    await this.endConnect4Game(interaction, gameState, 'bot');
+                    return;
+                }
+            }
+        }
+        
+        // Update display
+        await this.updateConnect4Display(interaction, gameState);
     }
 
     async handleBattleshipButton(interaction, gameState) {
@@ -876,6 +935,103 @@ class SeedyBot {
     async handleUnoButton(interaction, gameState) {
         // Implementation for Uno
         await interaction.reply({ content: 'Uno button handling - Coming soon!', ephemeral: true });
+    }
+
+    // Connect 4 helper methods
+    checkConnect4Win(board, row, col, player) {
+        const directions = [
+            [0, 1],   // horizontal
+            [1, 0],   // vertical
+            [1, 1],   // diagonal \
+            [1, -1]   // diagonal /
+        ];
+
+        for (const [dr, dc] of directions) {
+            let count = 1;
+            
+            // Check in positive direction
+            for (let i = 1; i < 4; i++) {
+                const newRow = row + dr * i;
+                const newCol = col + dc * i;
+                if (newRow >= 0 && newRow < 6 && newCol >= 0 && newCol < 7 && 
+                    board[newRow][newCol] === player) {
+                    count++;
+                } else {
+                    break;
+                }
+            }
+            
+            // Check in negative direction
+            for (let i = 1; i < 4; i++) {
+                const newRow = row - dr * i;
+                const newCol = col - dc * i;
+                if (newRow >= 0 && newRow < 6 && newCol >= 0 && newCol < 7 && 
+                    board[newRow][newCol] === player) {
+                    count++;
+                } else {
+                    break;
+                }
+            }
+            
+            if (count >= 4) return true;
+        }
+        
+        return false;
+    }
+
+    getConnect4BotMove(board) {
+        // Simple AI - try to win, then block, then center
+        for (let col = 0; col < 7; col++) {
+            if (this.canWinInColumn(board, col, 'Y')) return col;
+        }
+        
+        for (let col = 0; col < 7; col++) {
+            if (this.canWinInColumn(board, col, 'R')) return col;
+        }
+        
+        // Prefer center columns
+        const centerCols = [3, 2, 4, 1, 5, 0, 6];
+        for (const col of centerCols) {
+            if (this.isColumnAvailable(board, col)) return col;
+        }
+        
+        return -1;
+    }
+
+    canWinInColumn(board, col, player) {
+        if (!this.isColumnAvailable(board, col)) return false;
+        
+        // Find the row where the piece would be placed
+        let row = -1;
+        for (let i = 5; i >= 0; i--) {
+            if (!board[i][col]) {
+                row = i;
+                break;
+            }
+        }
+        
+        if (row === -1) return false;
+        
+        // Temporarily place piece and check for win
+        board[row][col] = player;
+        const canWin = this.checkConnect4Win(board, row, col, player);
+        board[row][col] = null;
+        
+        return canWin;
+    }
+
+    isColumnAvailable(board, col) {
+        return board[0][col] === null;
+    }
+
+    async endConnect4Game(interaction, gameState, winner) {
+        // Implementation for ending Connect 4 game
+        await interaction.reply({ content: `Connect 4 game ended! Winner: ${winner}`, ephemeral: true });
+    }
+
+    async updateConnect4Display(interaction, gameState) {
+        // Implementation for updating Connect 4 display
+        await interaction.reply({ content: 'Connect 4 display updated!', ephemeral: true });
     }
 
     cleanupExpiredGames() {
