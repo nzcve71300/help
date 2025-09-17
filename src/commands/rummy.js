@@ -40,14 +40,17 @@ module.exports = {
                 winner: null,
                 bet: betAmount,
                 userId: userId,
-                username: username
+                username: username,
+                createdAt: Date.now(),
+                lastActivity: Date.now()
             };
 
             // Deal initial cards
             this.dealCards(gameState);
 
-            // Store game state
-            bot.gameManager.activeGames.set(interaction.id, gameState);
+            // Store game state with message ID for button handling
+            const messageId = `rummy_${interaction.id}`;
+            bot.gameManager.activeGames.set(messageId, gameState);
 
             // Create game embed
             const embed = new EmbedBuilder()
@@ -75,7 +78,7 @@ module.exports = {
                 });
 
             // Create game buttons
-            const buttons = this.createGameButtons();
+            const buttons = this.createGameButtons(gameState, interaction.id);
 
             await interaction.reply({ 
                 embeds: [embed], 
@@ -140,23 +143,26 @@ module.exports = {
         return `${color} ${card.rank}${card.suit}`;
     },
 
-    createGameButtons() {
+    createGameButtons(gameState, interactionId) {
         const row = new ActionRowBuilder();
         
         const drawButton = new ButtonBuilder()
-            .setCustomId('rummy_draw')
+            .setCustomId(`rummy_${interactionId}_draw`)
             .setLabel('Draw from Deck')
-            .setStyle(ButtonStyle.Primary);
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('🃏');
 
         const discardButton = new ButtonBuilder()
-            .setCustomId('rummy_discard')
+            .setCustomId(`rummy_${interactionId}_discard`)
             .setLabel('Draw from Discard')
-            .setStyle(ButtonStyle.Secondary);
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🗑️');
 
         const endTurnButton = new ButtonBuilder()
-            .setCustomId('rummy_end')
+            .setCustomId(`rummy_${interactionId}_end`)
             .setLabel('End Turn')
-            .setStyle(ButtonStyle.Success);
+            .setStyle(ButtonStyle.Success)
+            .setEmoji('✅');
 
         row.addComponents(drawButton, discardButton, endTurnButton);
         return [row];

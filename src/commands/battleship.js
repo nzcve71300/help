@@ -179,7 +179,7 @@ module.exports = {
     createGameButtons(gameState, interactionId) {
         const rows = [];
         
-        // Create coordinate buttons (5 rows of 2 buttons each)
+        // Create coordinate buttons (5 rows of 2 buttons each for letters A-J)
         for (let row = 0; row < 5; row++) {
             const buttonRow = new ActionRowBuilder();
             for (let col = 0; col < 2; col++) {
@@ -198,18 +198,31 @@ module.exports = {
             rows.push(buttonRow);
         }
 
-        // Add number buttons (1-10)
-        const numberRow = new ActionRowBuilder();
-        for (let i = 1; i <= 10; i++) {
+        // Add number buttons (1-10) - split into two rows to avoid button limit
+        const numberRow1 = new ActionRowBuilder();
+        const numberRow2 = new ActionRowBuilder();
+        
+        for (let i = 1; i <= 5; i++) {
             const button = new ButtonBuilder()
                 .setCustomId(`bs_${interactionId}_${i}`)
                 .setLabel(`${i}`)
                 .setStyle(ButtonStyle.Secondary)
                 .setEmoji('🔢');
             
-            numberRow.addComponents(button);
+            numberRow1.addComponents(button);
         }
-        rows.push(numberRow);
+        
+        for (let i = 6; i <= 10; i++) {
+            const button = new ButtonBuilder()
+                .setCustomId(`bs_${interactionId}_${i}`)
+                .setLabel(`${i}`)
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🔢');
+            
+            numberRow2.addComponents(button);
+        }
+        
+        rows.push(numberRow1, numberRow2);
 
         return rows;
     },

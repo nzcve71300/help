@@ -1002,8 +1002,70 @@ class SeedyBot {
     }
 
     async handleRummyButton(interaction, gameState) {
-        // Implementation for Rummy
-        await interaction.reply({ content: 'Rummy button handling - Coming soon!', ephemeral: true });
+        const customId = interaction.customId;
+        const parts = customId.split('_');
+        
+        if (parts.length < 3) {
+            return interaction.reply({
+                content: '❌ Invalid button format!',
+                ephemeral: true
+            });
+        }
+        
+        const action = parts[2]; // rummy_interactionId_action
+        
+        if (action === 'draw') {
+            // Draw from deck
+            if (gameState.deck.length === 0) {
+                return interaction.reply({
+                    content: '❌ Deck is empty!',
+                    ephemeral: true
+                });
+            }
+            
+            const card = gameState.deck.pop();
+            gameState.userHand.push(card);
+            
+            await interaction.reply({
+                content: `🃏 Drew **${this.renderRummyCard(card)}** from the deck!`,
+                ephemeral: true
+            });
+            
+        } else if (action === 'discard') {
+            // Draw from discard pile
+            if (gameState.discardPile.length === 0) {
+                return interaction.reply({
+                    content: '❌ Discard pile is empty!',
+                    ephemeral: true
+                });
+            }
+            
+            const card = gameState.discardPile.pop();
+            gameState.userHand.push(card);
+            
+            await interaction.reply({
+                content: `🗑️ Drew **${this.renderRummyCard(card)}** from the discard pile!`,
+                ephemeral: true
+            });
+            
+        } else if (action === 'end') {
+            // End turn - bot's turn
+            gameState.currentPlayer = 'bot';
+            
+            // Bot's turn
+            await this.botRummyMove(gameState);
+            
+            // Check if game over
+            if (gameState.userHand.length === 0 || gameState.botHand.length === 0) {
+                await this.endRummyGame(interaction, gameState);
+                return;
+            }
+            
+            gameState.currentPlayer = 'user';
+        }
+        
+        // Update display
+        await this.updateRummyDisplay(interaction, gameState);
     }
 
     async handlePokerButton(interaction, gameState) {
@@ -1014,6 +1076,143 @@ class SeedyBot {
     async handleUnoButton(interaction, gameState) {
         // Implementation for Uno
         await interaction.reply({ content: 'Uno button handling - Coming soon!', ephemeral: true });
+    }
+
+    // Rummy helper methods
+    renderRummyCard(card) {
+        const color = ['♥️', '♦️'].includes(card.suit) ? '🔴' : '⚫';
+        return `${color} ${card.rank}${card.suit}`;
+    }
+
+    async botRummyMove(gameState) {
+        // Simple AI - draw from deck or discard pile randomly
+        if (Math.random() < 0.7 && gameState.deck.length > 0) {
+            // Draw from deck
+            const card = gameState.deck.pop();
+            gameState.botHand.push(card);
+        } else if (gameState.discardPile.length > 0) {
+            // Draw from discard pile
+            const card = gameState.discardPile.pop();
+            gameState.botHand.push(card);
+        }
+        
+        // Bot discards a random card
+        if (gameState.botHand.length > 0) {
+            const randomIndex = Math.floor(Math.random() * gameState.botHand.length);
+            const discardedCard = gameState.botHand.splice(randomIndex, 1)[0];
+            gameState.discardPile.push(discardedCard);
+        }
+    }
+
+    async endRummyGame(interaction, gameState) {
+        let result = '';
+        let reward = 0;
+        let color = 0x4ecdc4;
+
+        if (gameState.userHand.length === 0) {
+            result = `🎉 **${gameState.username} wins!** 🃏`;
+            reward = gameState.bet * 2;
+            color = 0x2ecc71;
+            await this.economy.addMoney(gameState.userId, reward, 'Rummy win');
+            await this.economy.updateGameStats(gameState.userId, 'rummy', true);
+        } else {
+            result = `🤖 **Seedy Bot wins!** 🃏`;
+            color = 0xe74c3c;
+            await this.economy.updateGameStats(gameState.userId, 'rummy', false);
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('🃏 Rummy Game - Finished!')
+            .setDescription(`${result}\n\n${gameState.bet > 0 ? `💰 **Reward:** ${this.economy.formatCurrency(reward)}` : '🎯 **Friendly Game**'}`)
+            .setColor(color)
+            .addFields({
+                name: '**🃏 Final Hands**',
+                value: `**${gameState.username}:** ${gameState.userHand.length} cards\n**Seedy Bot:** ${gameState.botHand.length} cards`,
+                inline: false
+            })
+            .setThumbnail('https://i.imgur.com/ieP1fd5.jpeg')
+            .setTimestamp()
+            .setFooter({ text: 'Game Over • Powered by Seedy' });
+
+        await interaction.update({ embeds: [embed], components: [] });
+        // Find and delete the game from activeGames
+        for (const [id, state] of this.gameManager.activeGames.entries()) {
+            if (state.userId === gameState.userId && !state.gameOver) {
+                this.gameManager.activeGames.delete(id);
+                break;
+            }
+        }
+    }
+
+    async updateRummyDisplay(interaction, gameState) {
+        const embed = new EmbedBuilder()
+            .setTitle('🃏 Rummy Game')
+            .setDescription(`**${gameState.username}** vs **Seedy Bot**\n\n${gameState.bet > 0 ? `💰 **Bet:** ${this.economy.formatCurrency(gameState.bet)}` : '🎯 **Friendly Game**'}\n\n**Current Turn:** ${gameState.currentPlayer === 'user' ? `🃏 ${gameState.username}` : '🤖 Seedy Bot'}`)
+            .setColor(0x4ecdc4)
+            .addFields({
+                name: '**🃏 Your Hand**',
+                value: this.renderRummyHand(gameState.userHand),
+                inline: true
+            }, {
+                name: '**🗑️ Discard Pile**',
+                value: gameState.discardPile.length > 0 ? this.renderRummyCard(gameState.discardPile[gameState.discardPile.length - 1]) : 'Empty',
+                inline: true
+            }, {
+                name: '**📊 Game Info**',
+                value: `**Deck:** ${gameState.deck.length} cards\n**Your Cards:** ${gameState.userHand.length}\n**Bot Cards:** ${gameState.botHand.length}`,
+                inline: false
+            })
+            .setThumbnail('https://i.imgur.com/ieP1fd5.jpeg')
+            .setTimestamp()
+            .setFooter({ text: '🃏 Click buttons to draw or discard cards! • Powered by Seedy' });
+
+        // Find the game ID for this user
+        let gameId = null;
+        for (const [id, state] of this.gameManager.activeGames.entries()) {
+            if (state.userId === gameState.userId && !state.gameOver) {
+                gameId = id;
+                break;
+            }
+        }
+        
+        if (gameId) {
+            const interactionId = gameId.replace('rummy_', '');
+            const buttons = this.createRummyButtons(gameState, interactionId);
+            await interaction.update({ embeds: [embed], components: buttons });
+        } else {
+            await interaction.update({ embeds: [embed], components: [] });
+        }
+    }
+
+    renderRummyHand(hand) {
+        if (hand.length === 0) return 'No cards';
+        return hand.map(card => this.renderRummyCard(card)).join(' ');
+    }
+
+    createRummyButtons(gameState, interactionId) {
+        const row = new ActionRowBuilder();
+        
+        const drawButton = new ButtonBuilder()
+            .setCustomId(`rummy_${interactionId}_draw`)
+            .setLabel('Draw from Deck')
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('🃏');
+
+        const discardButton = new ButtonBuilder()
+            .setCustomId(`rummy_${interactionId}_discard`)
+            .setLabel('Draw from Discard')
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji('🗑️')
+            .setDisabled(gameState.discardPile.length === 0);
+
+        const endTurnButton = new ButtonBuilder()
+            .setCustomId(`rummy_${interactionId}_end`)
+            .setLabel('End Turn')
+            .setStyle(ButtonStyle.Success)
+            .setEmoji('✅');
+
+        row.addComponents(drawButton, discardButton, endTurnButton);
+        return [row];
     }
 
     // Battleship helper methods
@@ -1154,7 +1353,7 @@ class SeedyBot {
     createBattleshipButtons(gameState, interactionId) {
         const rows = [];
         
-        // Create coordinate buttons (5 rows of 2 buttons each)
+        // Create coordinate buttons (5 rows of 2 buttons each for letters A-J)
         for (let row = 0; row < 5; row++) {
             const buttonRow = new ActionRowBuilder();
             for (let col = 0; col < 2; col++) {
@@ -1173,18 +1372,31 @@ class SeedyBot {
             rows.push(buttonRow);
         }
 
-        // Add number buttons (1-10)
-        const numberRow = new ActionRowBuilder();
-        for (let i = 1; i <= 10; i++) {
+        // Add number buttons (1-10) - split into two rows to avoid button limit
+        const numberRow1 = new ActionRowBuilder();
+        const numberRow2 = new ActionRowBuilder();
+        
+        for (let i = 1; i <= 5; i++) {
             const button = new ButtonBuilder()
                 .setCustomId(`bs_${interactionId}_${i}`)
                 .setLabel(`${i}`)
                 .setStyle(ButtonStyle.Secondary)
                 .setEmoji('🔢');
             
-            numberRow.addComponents(button);
+            numberRow1.addComponents(button);
         }
-        rows.push(numberRow);
+        
+        for (let i = 6; i <= 10; i++) {
+            const button = new ButtonBuilder()
+                .setCustomId(`bs_${interactionId}_${i}`)
+                .setLabel(`${i}`)
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🔢');
+            
+            numberRow2.addComponents(button);
+        }
+        
+        rows.push(numberRow1, numberRow2);
 
         return rows;
     }
