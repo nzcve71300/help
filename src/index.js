@@ -32,7 +32,7 @@ class SeedyBot {
         this.moderation = new ModerationService();
         this.gameManager = new GameManager(this.economy);
         this.surveyManager = new SurveyManager(this.database);
-        this.serverService = new ServerService(this.database);
+        this.serverService = null; // Will be initialized after database is ready
         // AI Service removed
 
         // Channel IDs
@@ -178,6 +178,9 @@ class SeedyBot {
             
             // Initialize database
             await this.database.initialize();
+            
+            // Initialize ServerService after database is ready
+            this.serverService = new ServerService(this.database);
             
             // Create SeedyAdmin role in all guilds
             await this.createSeedyAdminRole();
@@ -472,6 +475,14 @@ class SeedyBot {
 
     async handleServerSelectMenu(interaction) {
         try {
+            // Check if ServerService is initialized
+            if (!this.serverService) {
+                return interaction.reply({
+                    content: '❌ ServerService is not initialized yet. Please try again in a moment.',
+                    ephemeral: true
+                });
+            }
+
             const customId = interaction.customId;
             const selectedServer = interaction.values[0];
 
