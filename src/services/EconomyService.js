@@ -170,6 +170,32 @@ class EconomyService {
         }
     }
 
+    async checkFunds(userId, amount) {
+        const user = await this.getUser(userId);
+        return user.balance >= amount;
+    }
+
+    async forceSetBalance(userId, amount, reason = 'Admin adjustment', username = null) {
+        const user = await this.getUser(userId, username);
+        
+        // Ensure balance never goes negative
+        const newBalance = Math.max(0, amount);
+
+        await this.database.run(
+            'UPDATE users SET balance = ? WHERE user_id = ?',
+            [newBalance, userId]
+        );
+
+        // Log transaction
+        const difference = newBalance - user.balance;
+        await this.database.run(
+            'INSERT INTO transactions (user_id, amount, type, description) VALUES (?, ?, ?, ?)',
+            [userId, difference, difference > 0 ? 'admin_give' : 'admin_remove', reason]
+        );
+
+        return newBalance;
+    }
+
     formatCurrency(amount) {
         return `${this.currencySymbol} ${amount.toLocaleString()}`;
     }

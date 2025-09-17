@@ -252,7 +252,14 @@ class SeedyBot {
             if (interaction.isChatInputCommand()) {
                 await this.handleSlashCommand(interaction);
             } else if (interaction.isButton()) {
-                await this.surveyManager.handleButton(interaction);
+                // Check if it's a game button or survey button
+                if (interaction.customId.startsWith('ttt_') || interaction.customId.startsWith('c4_') || 
+                    interaction.customId.startsWith('bs_') || interaction.customId.startsWith('rummy_') ||
+                    interaction.customId.startsWith('poker_') || interaction.customId.startsWith('uno_')) {
+                    await this.handleGameButton(interaction);
+                } else {
+                    await this.surveyManager.handleButton(interaction);
+                }
             } else if (interaction.isModalSubmit()) {
                 await this.surveyManager.handleModal(interaction, this);
             } else if (interaction.isStringSelectMenu()) {
@@ -435,7 +442,7 @@ class SeedyBot {
     }
 
     isEconomyCommand(commandName) {
-        const economyCommands = ['balance', 'daily', 'leaderboard', 'hangman'];
+        const economyCommands = ['balance', 'daily', 'leaderboard', 'hangman', 'tictactoe', 'connect4', 'battleship', 'rummy', 'poker', 'uno'];
         return economyCommands.includes(commandName);
     }
 
@@ -598,6 +605,253 @@ class SeedyBot {
                 ephemeral: true
             });
         }
+    }
+
+    async handleGameButton(interaction) {
+        try {
+            const gameId = interaction.message.id;
+            const gameState = this.gameManager.activeGames.get(gameId);
+
+            if (!gameState) {
+                return interaction.reply({
+                    content: '❌ Game not found or has expired!',
+                    ephemeral: true
+                });
+            }
+
+            // Check if it's the user's turn
+            if (gameState.currentPlayer !== 'user' || gameState.userId !== interaction.user.id) {
+                return interaction.reply({
+                    content: '❌ It\'s not your turn!',
+                    ephemeral: true
+                });
+            }
+
+            // Handle different game types
+            if (interaction.customId.startsWith('ttt_')) {
+                await this.handleTicTacToeButton(interaction, gameState);
+            } else if (interaction.customId.startsWith('c4_')) {
+                await this.handleConnect4Button(interaction, gameState);
+            } else if (interaction.customId.startsWith('bs_')) {
+                await this.handleBattleshipButton(interaction, gameState);
+            } else if (interaction.customId.startsWith('rummy_')) {
+                await this.handleRummyButton(interaction, gameState);
+            } else if (interaction.customId.startsWith('poker_')) {
+                await this.handlePokerButton(interaction, gameState);
+            } else if (interaction.customId.startsWith('uno_')) {
+                await this.handleUnoButton(interaction, gameState);
+            }
+
+        } catch (error) {
+            console.error('Error handling game button:', error);
+            await interaction.reply({
+                content: '❌ There was an error processing your move!',
+                ephemeral: true
+            });
+        }
+    }
+
+    async handleTicTacToeButton(interaction, gameState) {
+        const position = parseInt(interaction.customId.split('_')[1]);
+        
+        if (gameState.board[position] !== '') {
+            return interaction.reply({
+                content: '❌ That position is already taken!',
+                ephemeral: true
+            });
+        }
+
+        // User move
+        gameState.board[position] = 'X';
+        
+        // Check for winner
+        const winner = this.checkTicTacToeWinner(gameState.board);
+        if (winner) {
+            await this.endTicTacToeGame(interaction, gameState, winner);
+            return;
+        }
+
+        // Bot move
+        const botMove = this.getTicTacToeBestMove(gameState.board);
+        if (botMove !== -1) {
+            gameState.board[botMove] = 'O';
+            
+            // Check for winner again
+            const winner2 = this.checkTicTacToeWinner(gameState.board);
+            if (winner2) {
+                await this.endTicTacToeGame(interaction, gameState, winner2);
+                return;
+            }
+        }
+
+        // Update game display
+        await this.updateTicTacToeDisplay(interaction, gameState);
+    }
+
+    checkTicTacToeWinner(board) {
+        const winningCombinations = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+            [0, 4, 8], [2, 4, 6] // Diagonals
+        ];
+
+        for (const combo of winningCombinations) {
+            const [a, b, c] = combo;
+            if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                return board[a];
+            }
+        }
+
+        return board.includes('') ? null : 'tie';
+    }
+
+    getTicTacToeBestMove(board) {
+        // Simple AI logic
+        for (let i = 0; i < 9; i++) {
+            if (board[i] === '') {
+                board[i] = 'O';
+                if (this.checkTicTacToeWinner(board) === 'O') {
+                    board[i] = '';
+                    return i;
+                }
+                board[i] = '';
+            }
+        }
+
+        for (let i = 0; i < 9; i++) {
+            if (board[i] === '') {
+                board[i] = 'X';
+                if (this.checkTicTacToeWinner(board) === 'X') {
+                    board[i] = '';
+                    return i;
+                }
+                board[i] = '';
+            }
+        }
+
+        if (board[4] === '') return 4;
+        const corners = [0, 2, 6, 8];
+        for (const corner of corners) {
+            if (board[corner] === '') return corner;
+        }
+        const edges = [1, 3, 5, 7];
+        for (const edge of edges) {
+            if (board[edge] === '') return edge;
+        }
+
+        return -1;
+    }
+
+    async endTicTacToeGame(interaction, gameState, winner) {
+        let result = '';
+        let reward = 0;
+
+        if (winner === 'X') {
+            result = `🎉 **${gameState.username} wins!**`;
+            reward = gameState.bet * 2;
+            await this.economy.addMoney(gameState.userId, reward, 'Tic-Tac-Toe win');
+            await this.economy.updateGameStats(gameState.userId, 'tictactoe', true);
+        } else if (winner === 'O') {
+            result = `🤖 **Seedy Bot wins!**`;
+            await this.economy.removeMoney(gameState.userId, gameState.bet, 'Tic-Tac-Toe loss');
+            await this.economy.updateGameStats(gameState.userId, 'tictactoe', false);
+        } else {
+            result = `🤝 **It's a tie!**`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('🎮 Tic-Tac-Toe Game - Finished!')
+            .setDescription(`${result}\n\n${reward > 0 ? `💰 **Reward:** ${this.economy.formatCurrency(reward)}` : ''}`)
+            .setColor(winner === 'X' ? 0x00ff00 : winner === 'O' ? 0xff0000 : 0xffff00)
+            .addFields({
+                name: '**Final Board**',
+                value: this.renderTicTacToeBoard(gameState.board),
+                inline: false
+            })
+            .setTimestamp()
+            .setFooter({ text: 'Game Over • Powered by Seedy' });
+
+        await interaction.update({ embeds: [embed], components: [] });
+        this.gameManager.activeGames.delete(interaction.message.id);
+    }
+
+    async updateTicTacToeDisplay(interaction, gameState) {
+        const embed = new EmbedBuilder()
+            .setTitle('🎮 Tic-Tac-Toe Game')
+            .setDescription(`**${gameState.username}** vs **Seedy Bot**\n\n${gameState.bet > 0 ? `💰 **Bet:** ${this.economy.formatCurrency(gameState.bet)}` : '🎯 **Friendly Game**'}\n\n**Current Turn:** ${gameState.currentPlayer === 'X' ? gameState.username : 'Seedy Bot'}`)
+            .setColor(0x4ecdc4)
+            .addFields({
+                name: '**Game Board**',
+                value: this.renderTicTacToeBoard(gameState.board),
+                inline: false
+            })
+            .setTimestamp()
+            .setFooter({ text: 'Click a button to make your move! • Powered by Seedy' });
+
+        const buttons = this.createTicTacToeButtons(gameState.board);
+        await interaction.update({ embeds: [embed], components: buttons });
+    }
+
+    renderTicTacToeBoard(board) {
+        const displayBoard = board.map((cell, index) => {
+            if (cell === '') return `${index + 1}`;
+            return cell === 'X' ? '❌' : '⭕';
+        });
+
+        return `\`\`\`
+ ${displayBoard[0]} │ ${displayBoard[1]} │ ${displayBoard[2]}
+───┼───┼───
+ ${displayBoard[3]} │ ${displayBoard[4]} │ ${displayBoard[5]}
+───┼───┼───
+ ${displayBoard[6]} │ ${displayBoard[7]} │ ${displayBoard[8]}
+\`\`\``;
+    }
+
+    createTicTacToeButtons(board) {
+        const rows = [];
+        
+        for (let i = 0; i < 3; i++) {
+            const row = new ActionRowBuilder();
+            for (let j = 0; j < 3; j++) {
+                const index = i * 3 + j;
+                const button = new ButtonBuilder()
+                    .setCustomId(`ttt_${index}`)
+                    .setLabel(board[index] === '' ? `${index + 1}` : (board[index] === 'X' ? '❌' : '⭕'))
+                    .setStyle(board[index] === '' ? ButtonStyle.Secondary : ButtonStyle.Primary)
+                    .setDisabled(board[index] !== '');
+                
+                row.addComponents(button);
+            }
+            rows.push(row);
+        }
+
+        return rows;
+    }
+
+    // Placeholder methods for other games (to be implemented)
+    async handleConnect4Button(interaction, gameState) {
+        // Implementation for Connect 4
+        await interaction.reply({ content: 'Connect 4 button handling - Coming soon!', ephemeral: true });
+    }
+
+    async handleBattleshipButton(interaction, gameState) {
+        // Implementation for Battleship
+        await interaction.reply({ content: 'Battleship button handling - Coming soon!', ephemeral: true });
+    }
+
+    async handleRummyButton(interaction, gameState) {
+        // Implementation for Rummy
+        await interaction.reply({ content: 'Rummy button handling - Coming soon!', ephemeral: true });
+    }
+
+    async handlePokerButton(interaction, gameState) {
+        // Implementation for Poker
+        await interaction.reply({ content: 'Poker button handling - Coming soon!', ephemeral: true });
+    }
+
+    async handleUnoButton(interaction, gameState) {
+        // Implementation for Uno
+        await interaction.reply({ content: 'Uno button handling - Coming soon!', ephemeral: true });
     }
 
     async start() {
