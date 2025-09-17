@@ -31,7 +31,7 @@ module.exports = {
 
             // Initialize game state
             const gameState = {
-                deck: this.createDeck(),
+                deck: module.exports.createDeck(),
                 userHand: [],
                 botHand: [],
                 discardPile: [],
@@ -46,7 +46,7 @@ module.exports = {
             };
 
             // Deal initial cards
-            this.dealCards(gameState);
+            module.exports.dealCards(gameState);
 
             // Store game state with message ID for button handling
             const messageId = `rummy_${interaction.id}`;
@@ -59,11 +59,11 @@ module.exports = {
                 .setColor(0x4ecdc4)
                 .addFields({
                     name: '**Your Hand**',
-                    value: this.renderHand(gameState.userHand),
+                    value: module.exports.renderHand(gameState.userHand),
                     inline: true
                 }, {
                     name: '**Discard Pile**',
-                    value: gameState.discardPile.length > 0 ? this.renderCard(gameState.discardPile[gameState.discardPile.length - 1]) : 'Empty',
+                    value: gameState.discardPile.length > 0 ? module.exports.renderCard(gameState.discardPile[gameState.discardPile.length - 1]) : 'Empty',
                     inline: true
                 }, {
                     name: '**Game Info**',
@@ -78,7 +78,7 @@ module.exports = {
                 });
 
             // Create game buttons
-            const buttons = this.createGameButtons(gameState, interaction.id);
+            const buttons = module.exports.createGameButtons(gameState, interaction.id);
 
             await interaction.reply({ 
                 embeds: [embed], 
@@ -102,7 +102,7 @@ module.exports = {
 
         for (const suit of suits) {
             for (const rank of ranks) {
-                deck.push({ suit, rank, value: this.getCardValue(rank) });
+                deck.push({ suit, rank, value: module.exports.getCardValue(rank) });
             }
         }
 
@@ -135,7 +135,7 @@ module.exports = {
     renderHand(hand) {
         if (hand.length === 0) return 'No cards';
         
-        return hand.map(card => this.renderCard(card)).join(' ');
+        return hand.map(card => module.exports.renderCard(card)).join(' ');
     },
 
     renderCard(card) {
@@ -175,8 +175,8 @@ module.exports = {
 
     checkRummy(hand) {
         // Check for sets (3+ cards of same rank) and runs (3+ consecutive cards of same suit)
-        const sets = this.findSets(hand);
-        const runs = this.findRuns(hand);
+        const sets = module.exports.findSets(hand);
+        const runs = module.exports.findRuns(hand);
         
         return sets.length > 0 || runs.length > 0;
     },

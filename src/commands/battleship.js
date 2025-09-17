@@ -35,8 +35,8 @@ module.exports = {
                 botBoard: Array(10).fill().map(() => Array(10).fill('')),
                 userShots: Array(10).fill().map(() => Array(10).fill('')),
                 botShots: Array(10).fill().map(() => Array(10).fill('')),
-                userShips: this.generateShips(),
-                botShips: this.generateShips(),
+                userShips: module.exports.generateShips(),
+                botShips: module.exports.generateShips(),
                 currentPlayer: 'user',
                 gamePhase: 'playing', // setup, playing, finished
                 gameOver: false,
@@ -49,8 +49,8 @@ module.exports = {
             };
 
             // Place user ships
-            this.placeShips(gameState.userBoard, gameState.userShips);
-            this.placeShips(gameState.botBoard, gameState.botShips);
+            module.exports.placeShips(gameState.userBoard, gameState.userShips);
+            module.exports.placeShips(gameState.botBoard, gameState.botShips);
 
             // Store game state with message ID for button handling
             const messageId = `bs_${interaction.id}`;
@@ -63,11 +63,11 @@ module.exports = {
                 .setColor(0x4ecdc4)
                 .addFields({
                     name: '**Your Board**',
-                    value: this.renderBoard(gameState.userBoard, true),
+                    value: module.exports.renderBoard(gameState.userBoard, true),
                     inline: true
                 }, {
                     name: '**Enemy Board**',
-                    value: this.renderBoard(gameState.userShots, false),
+                    value: module.exports.renderBoard(gameState.userShots, false),
                     inline: true
                 })
                 .setThumbnail('https://i.imgur.com/ieP1fd5.jpeg')
@@ -78,7 +78,7 @@ module.exports = {
                 });
 
             // Create game buttons
-            const buttons = this.createGameButtons(gameState, interaction.id);
+            const buttons = module.exports.createGameButtons(gameState, interaction.id);
 
             await interaction.reply({ 
                 embeds: [embed], 
@@ -113,8 +113,8 @@ module.exports = {
                 const col = Math.floor(Math.random() * 10);
                 const horizontal = Math.random() < 0.5;
 
-                if (this.canPlaceShip(board, row, col, ship.size, horizontal)) {
-                    this.placeShip(board, row, col, ship.size, horizontal);
+                if (module.exports.canPlaceShip(board, row, col, ship.size, horizontal)) {
+                    module.exports.placeShip(board, row, col, ship.size, horizontal);
                     ship.placed = true;
                     placed = true;
                 }

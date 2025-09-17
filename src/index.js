@@ -650,9 +650,17 @@ class SeedyBot {
             }
 
             // Check if it's the user's turn
-            if (gameState.currentPlayer !== 'user' || gameState.userId !== interaction.user.id) {
+            if (gameState.currentPlayer !== 'user' && gameState.currentPlayer !== 'R' && gameState.currentPlayer !== 'X') {
                 return interaction.reply({
                     content: '❌ It\'s not your turn!',
+                    ephemeral: true
+                });
+            }
+
+            // Check if it's the right user
+            if (gameState.userId !== interaction.user.id) {
+                return interaction.reply({
+                    content: '❌ This is not your game!',
                     ephemeral: true
                 });
             }
