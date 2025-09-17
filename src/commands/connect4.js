@@ -37,11 +37,15 @@ module.exports = {
                 winner: null,
                 bet: betAmount,
                 userId: userId,
-                username: username
+                username: username,
+                createdAt: Date.now(),
+                lastActivity: Date.now(),
+                moves: 0
             };
 
-            // Store game state
-            bot.gameManager.activeGames.set(interaction.id, gameState);
+            // Store game state with message ID for button handling
+            const messageId = `c4_${interaction.id}`;
+            bot.gameManager.activeGames.set(messageId, gameState);
 
             // Create game embed
             const embed = new EmbedBuilder()
@@ -61,7 +65,7 @@ module.exports = {
                 });
 
             // Create game buttons
-            const buttons = this.createGameButtons();
+            const buttons = this.createGameButtons(gameState.board, interaction.id);
 
             await interaction.reply({ 
                 embeds: [embed], 
@@ -107,14 +111,17 @@ module.exports = {
         return display;
     },
 
-    createGameButtons() {
+    createGameButtons(board, interactionId) {
         const row = new ActionRowBuilder();
         
-        for (let col = 1; col <= 7; col++) {
+        for (let col = 0; col < 7; col++) {
+            const isFull = board[0][col] !== '';
             const button = new ButtonBuilder()
-                .setCustomId(`c4_${col}`)
-                .setLabel(`${col}`)
-                .setStyle(ButtonStyle.Primary);
+                .setCustomId(`c4_${interactionId}_${col}`)
+                .setLabel(`${col + 1}`)
+                .setStyle(isFull ? ButtonStyle.Danger : ButtonStyle.Primary)
+                .setDisabled(isFull)
+                .setEmoji(isFull ? '❌' : '⬇️');
             
             row.addComponents(button);
         }

@@ -38,20 +38,23 @@ module.exports = {
                 userShips: this.generateShips(),
                 botShips: this.generateShips(),
                 currentPlayer: 'user',
-                gamePhase: 'setup', // setup, playing, finished
+                gamePhase: 'playing', // setup, playing, finished
                 gameOver: false,
                 winner: null,
                 bet: betAmount,
                 userId: userId,
-                username: username
+                username: username,
+                createdAt: Date.now(),
+                lastActivity: Date.now()
             };
 
             // Place user ships
             this.placeShips(gameState.userBoard, gameState.userShips);
             this.placeShips(gameState.botBoard, gameState.botShips);
 
-            // Store game state
-            bot.gameManager.activeGames.set(interaction.id, gameState);
+            // Store game state with message ID for button handling
+            const messageId = `bs_${interaction.id}`;
+            bot.gameManager.activeGames.set(messageId, gameState);
 
             // Create game embed
             const embed = new EmbedBuilder()
@@ -75,7 +78,7 @@ module.exports = {
                 });
 
             // Create game buttons
-            const buttons = this.createGameButtons();
+            const buttons = this.createGameButtons(gameState, interaction.id);
 
             await interaction.reply({ 
                 embeds: [embed], 
@@ -173,19 +176,21 @@ module.exports = {
         return display;
     },
 
-    createGameButtons() {
+    createGameButtons(gameState, interactionId) {
         const rows = [];
-        const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
         
+        // Create coordinate buttons (5 rows of 2 buttons each)
         for (let row = 0; row < 5; row++) {
             const buttonRow = new ActionRowBuilder();
             for (let col = 0; col < 2; col++) {
                 const letterIndex = row * 2 + col;
                 if (letterIndex < 10) {
+                    const letter = String.fromCharCode(65 + letterIndex);
                     const button = new ButtonBuilder()
-                        .setCustomId(`bs_${letters[letterIndex]}`)
-                        .setLabel(letters[letterIndex])
-                        .setStyle(ButtonStyle.Primary);
+                        .setCustomId(`bs_${interactionId}_${letter}`)
+                        .setLabel(letter)
+                        .setStyle(ButtonStyle.Primary)
+                        .setEmoji('🎯');
                     
                     buttonRow.addComponents(button);
                 }
@@ -193,13 +198,14 @@ module.exports = {
             rows.push(buttonRow);
         }
 
-        // Add number buttons
+        // Add number buttons (1-10)
         const numberRow = new ActionRowBuilder();
         for (let i = 1; i <= 10; i++) {
             const button = new ButtonBuilder()
-                .setCustomId(`bs_${i}`)
+                .setCustomId(`bs_${interactionId}_${i}`)
                 .setLabel(`${i}`)
-                .setStyle(ButtonStyle.Secondary);
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🔢');
             
             numberRow.addComponents(button);
         }

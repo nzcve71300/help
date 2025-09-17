@@ -865,12 +865,12 @@ class SeedyBot {
 
     // Placeholder methods for other games (to be implemented)
     async handleConnect4Button(interaction, gameState) {
-        const column = parseInt(interaction.customId.split('_')[1]);
+        const column = parseInt(interaction.customId.split('_')[2]); // c4_interactionId_column
         
-        // Basic Connect 4 logic - find lowest empty spot in column
+        // Find lowest empty spot in column
         let row = -1;
         for (let i = 5; i >= 0; i--) {
-            if (!gameState.board[i][column]) {
+            if (gameState.board[i][column] === '') {
                 row = i;
                 break;
             }
@@ -878,35 +878,43 @@ class SeedyBot {
         
         if (row === -1) {
             return interaction.reply({
-                content: '❌ That column is full!',
+                content: '❌ That column is full! Choose another column.',
                 ephemeral: true
             });
         }
         
         // Place user piece
-        gameState.board[row][column] = 'R'; // Red for user
+        gameState.board[row][column] = 'R';
+        gameState.moves++;
         
         // Check for win
-        if (this.checkConnect4Win(gameState.board, row, column, 'R')) {
+        if (this.checkConnect4Winner(gameState.board, row, column, 'R')) {
             await this.endConnect4Game(interaction, gameState, 'user');
             return;
         }
         
-        // Bot move (simple AI)
+        // Check for tie
+        if (gameState.moves >= 42) {
+            await this.endConnect4Game(interaction, gameState, 'tie');
+            return;
+        }
+        
+        // Bot move (AI)
         const botColumn = this.getConnect4BotMove(gameState.board);
         if (botColumn !== -1) {
             let botRow = -1;
             for (let i = 5; i >= 0; i--) {
-                if (!gameState.board[i][botColumn]) {
+                if (gameState.board[i][botColumn] === '') {
                     botRow = i;
                     break;
                 }
             }
             
             if (botRow !== -1) {
-                gameState.board[botRow][botColumn] = 'Y'; // Yellow for bot
+                gameState.board[botRow][botColumn] = 'Y';
+                gameState.moves++;
                 
-                if (this.checkConnect4Win(gameState.board, botRow, botColumn, 'Y')) {
+                if (this.checkConnect4Winner(gameState.board, botRow, botColumn, 'Y')) {
                     await this.endConnect4Game(interaction, gameState, 'bot');
                     return;
                 }
@@ -918,8 +926,79 @@ class SeedyBot {
     }
 
     async handleBattleshipButton(interaction, gameState) {
-        // Implementation for Battleship
-        await interaction.reply({ content: 'Battleship button handling - Coming soon!', ephemeral: true });
+        const customId = interaction.customId;
+        const parts = customId.split('_');
+        
+        if (parts.length < 4) {
+            return interaction.reply({
+                content: '❌ Invalid button format!',
+                ephemeral: true
+            });
+        }
+        
+        const coordinate = parts[3]; // bs_interactionId_coordinate
+        
+        // Parse coordinate (A1, B2, etc.)
+        let row, col;
+        if (coordinate.match(/^[A-J]$/)) {
+            // Letter button - need to wait for number
+            gameState.selectedLetter = coordinate;
+            return interaction.reply({
+                content: `🎯 Selected column **${coordinate}**. Now click a row number (1-10)!`,
+                ephemeral: true
+            });
+        } else if (coordinate.match(/^[1-9]|10$/)) {
+            // Number button - need letter
+            if (!gameState.selectedLetter) {
+                return interaction.reply({
+                    content: '❌ Please select a column first (A-J)!',
+                    ephemeral: true
+                });
+            }
+            
+            row = parseInt(coordinate) - 1;
+            col = gameState.selectedLetter.charCodeAt(0) - 65;
+            gameState.selectedLetter = null; // Reset selection
+        } else {
+            return interaction.reply({
+                content: '❌ Invalid coordinate!',
+                ephemeral: true
+            });
+        }
+        
+        // Check if already shot
+        if (gameState.userShots[row][col] !== '') {
+            return interaction.reply({
+                content: '❌ You already shot there!',
+                ephemeral: true
+            });
+        }
+        
+        // Make shot
+        const hit = gameState.botBoard[row][col] === 'S';
+        gameState.userShots[row][col] = hit ? 'H' : 'M';
+        
+        if (hit) {
+            gameState.botBoard[row][col] = 'H';
+        }
+        
+        // Check if game over
+        if (this.checkBattleshipGameOver(gameState.botBoard)) {
+            await this.endBattleshipGame(interaction, gameState, 'user');
+            return;
+        }
+        
+        // Bot's turn
+        await this.botBattleshipMove(gameState);
+        
+        // Check if bot won
+        if (this.checkBattleshipGameOver(gameState.userBoard)) {
+            await this.endBattleshipGame(interaction, gameState, 'bot');
+            return;
+        }
+        
+        // Update display
+        await this.updateBattleshipDisplay(interaction, gameState);
     }
 
     async handleRummyButton(interaction, gameState) {
@@ -937,54 +1016,215 @@ class SeedyBot {
         await interaction.reply({ content: 'Uno button handling - Coming soon!', ephemeral: true });
     }
 
-    // Connect 4 helper methods
-    checkConnect4Win(board, row, col, player) {
-        const directions = [
-            [0, 1],   // horizontal
-            [1, 0],   // vertical
-            [1, 1],   // diagonal \
-            [1, -1]   // diagonal /
-        ];
+    // Battleship helper methods
+    checkBattleshipGameOver(board) {
+        for (let row = 0; row < 10; row++) {
+            for (let col = 0; col < 10; col++) {
+                if (board[row][col] === 'S') {
+                    return false; // Still has ships
+                }
+            }
+        }
+        return true; // All ships sunk
+    }
 
-        for (const [dr, dc] of directions) {
-            let count = 1;
-            
-            // Check in positive direction
-            for (let i = 1; i < 4; i++) {
-                const newRow = row + dr * i;
-                const newCol = col + dc * i;
-                if (newRow >= 0 && newRow < 6 && newCol >= 0 && newCol < 7 && 
-                    board[newRow][newCol] === player) {
-                    count++;
-                } else {
-                    break;
-                }
+    async botBattleshipMove(gameState) {
+        // Simple AI - random shots
+        let row, col;
+        do {
+            row = Math.floor(Math.random() * 10);
+            col = Math.floor(Math.random() * 10);
+        } while (gameState.botShots[row][col] !== '');
+
+        const hit = gameState.userBoard[row][col] === 'S';
+        gameState.botShots[row][col] = hit ? 'H' : 'M';
+        
+        if (hit) {
+            gameState.userBoard[row][col] = 'H';
+        }
+    }
+
+    async endBattleshipGame(interaction, gameState, winner) {
+        let result = '';
+        let reward = 0;
+        let color = 0x3498db;
+
+        if (winner === 'user') {
+            result = `🎉 **${gameState.username} wins!** 🚢`;
+            reward = gameState.bet * 2;
+            color = 0x2ecc71;
+            await this.economy.addMoney(gameState.userId, reward, 'Battleship win');
+            await this.economy.updateGameStats(gameState.userId, 'battleship', true);
+        } else {
+            result = `🤖 **Seedy Bot wins!** 🚢`;
+            color = 0xe74c3c;
+            await this.economy.updateGameStats(gameState.userId, 'battleship', false);
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('🚢⚓ Battleship Game - Finished!')
+            .setDescription(`${result}\n\n${gameState.bet > 0 ? `💰 **Reward:** ${this.economy.formatCurrency(reward)}` : '🎯 **Friendly Game**'}`)
+            .setColor(color)
+            .addFields({
+                name: '**🌊 Your Ocean**',
+                value: this.renderBattleshipBoard(gameState.userBoard, true),
+                inline: true
+            }, {
+                name: '**🎯 Enemy Ocean**',
+                value: this.renderBattleshipBoard(gameState.botBoard, true),
+                inline: true
+            })
+            .setThumbnail('https://i.imgur.com/ieP1fd5.jpeg')
+            .setTimestamp()
+            .setFooter({ text: 'Game Over • Powered by Seedy' });
+
+        await interaction.update({ embeds: [embed], components: [] });
+        // Find and delete the game from activeGames
+        for (const [id, state] of this.gameManager.activeGames.entries()) {
+            if (state.userId === gameState.userId && !state.gameOver) {
+                this.gameManager.activeGames.delete(id);
+                break;
             }
-            
-            // Check in negative direction
-            for (let i = 1; i < 4; i++) {
-                const newRow = row - dr * i;
-                const newCol = col - dc * i;
-                if (newRow >= 0 && newRow < 6 && newCol >= 0 && newCol < 7 && 
-                    board[newRow][newCol] === player) {
-                    count++;
-                } else {
-                    break;
-                }
+        }
+    }
+
+    async updateBattleshipDisplay(interaction, gameState) {
+        const embed = new EmbedBuilder()
+            .setTitle('🚢⚓ Battleship Game')
+            .setDescription(`**${gameState.username}** 🚢 vs **Seedy Bot** 🤖\n\n${gameState.bet > 0 ? `💰 **Bet:** ${this.economy.formatCurrency(gameState.bet)}` : '🎯 **Friendly Game**'}\n\n**Current Turn:** ${gameState.currentPlayer === 'user' ? `🚢 ${gameState.username}` : '🤖 Seedy Bot'}`)
+            .setColor(0x3498db)
+            .addFields({
+                name: '**🌊 Your Ocean**',
+                value: this.renderBattleshipBoard(gameState.userBoard, true),
+                inline: true
+            }, {
+                name: '**🎯 Enemy Ocean**',
+                value: this.renderBattleshipBoard(gameState.userShots, false),
+                inline: true
+            })
+            .setThumbnail('https://i.imgur.com/ieP1fd5.jpeg')
+            .setTimestamp()
+            .setFooter({ text: '🎯 Click coordinates to attack! • Powered by Seedy' });
+
+        // Find the game ID for this user
+        let gameId = null;
+        for (const [id, state] of this.gameManager.activeGames.entries()) {
+            if (state.userId === gameState.userId && !state.gameOver) {
+                gameId = id;
+                break;
             }
-            
-            if (count >= 4) return true;
         }
         
+        if (gameId) {
+            const interactionId = gameId.replace('bs_', '');
+            const buttons = this.createBattleshipButtons(gameState, interactionId);
+            await interaction.update({ embeds: [embed], components: buttons });
+        } else {
+            await interaction.update({ embeds: [embed], components: [] });
+        }
+    }
+
+    renderBattleshipBoard(board, showShips = false) {
+        let display = '```\n';
+        display += '   A B C D E F G H I J\n';
+        
+        for (let row = 0; row < 10; row++) {
+            display += `${row + 1} `;
+            if (row < 9) display += ' ';
+            
+            for (let col = 0; col < 10; col++) {
+                const cell = board[row][col];
+                if (cell === 'S' && showShips) {
+                    display += '🚢 ';
+                } else if (cell === 'H') {
+                    display += '💥 ';
+                } else if (cell === 'M') {
+                    display += '❌ ';
+                } else {
+                    display += '🌊 ';
+                }
+            }
+            display += '\n';
+        }
+        
+        display += '```';
+        return display;
+    }
+
+    createBattleshipButtons(gameState, interactionId) {
+        const rows = [];
+        
+        // Create coordinate buttons (5 rows of 2 buttons each)
+        for (let row = 0; row < 5; row++) {
+            const buttonRow = new ActionRowBuilder();
+            for (let col = 0; col < 2; col++) {
+                const letterIndex = row * 2 + col;
+                if (letterIndex < 10) {
+                    const letter = String.fromCharCode(65 + letterIndex);
+                    const button = new ButtonBuilder()
+                        .setCustomId(`bs_${interactionId}_${letter}`)
+                        .setLabel(letter)
+                        .setStyle(ButtonStyle.Primary)
+                        .setEmoji('🎯');
+                    
+                    buttonRow.addComponents(button);
+                }
+            }
+            rows.push(buttonRow);
+        }
+
+        // Add number buttons (1-10)
+        const numberRow = new ActionRowBuilder();
+        for (let i = 1; i <= 10; i++) {
+            const button = new ButtonBuilder()
+                .setCustomId(`bs_${interactionId}_${i}`)
+                .setLabel(`${i}`)
+                .setStyle(ButtonStyle.Secondary)
+                .setEmoji('🔢');
+            
+            numberRow.addComponents(button);
+        }
+        rows.push(numberRow);
+
+        return rows;
+    }
+
+    // Connect 4 helper methods
+    checkConnect4Winner(board, row, col, player) {
+        // Check horizontal
+        let count = 1;
+        for (let c = col - 1; c >= 0 && board[row][c] === player; c--) count++;
+        for (let c = col + 1; c < 7 && board[row][c] === player; c++) count++;
+        if (count >= 4) return true;
+
+        // Check vertical
+        count = 1;
+        for (let r = row - 1; r >= 0 && board[r][col] === player; r--) count++;
+        for (let r = row + 1; r < 6 && board[r][col] === player; r++) count++;
+        if (count >= 4) return true;
+
+        // Check diagonal \
+        count = 1;
+        for (let r = row - 1, c = col - 1; r >= 0 && c >= 0 && board[r][c] === player; r--, c--) count++;
+        for (let r = row + 1, c = col + 1; r < 6 && c < 7 && board[r][c] === player; r++, c++) count++;
+        if (count >= 4) return true;
+
+        // Check diagonal /
+        count = 1;
+        for (let r = row - 1, c = col + 1; r >= 0 && c < 7 && board[r][c] === player; r--, c++) count++;
+        for (let r = row + 1, c = col - 1; r < 6 && c >= 0 && board[r][c] === player; r++, c--) count++;
+        if (count >= 4) return true;
+
         return false;
     }
 
     getConnect4BotMove(board) {
-        // Simple AI - try to win, then block, then center
+        // Try to win
         for (let col = 0; col < 7; col++) {
             if (this.canWinInColumn(board, col, 'Y')) return col;
         }
         
+        // Try to block
         for (let col = 0; col < 7; col++) {
             if (this.canWinInColumn(board, col, 'R')) return col;
         }
@@ -1004,7 +1244,7 @@ class SeedyBot {
         // Find the row where the piece would be placed
         let row = -1;
         for (let i = 5; i >= 0; i--) {
-            if (!board[i][col]) {
+            if (board[i][col] === '') {
                 row = i;
                 break;
             }
@@ -1014,24 +1254,140 @@ class SeedyBot {
         
         // Temporarily place piece and check for win
         board[row][col] = player;
-        const canWin = this.checkConnect4Win(board, row, col, player);
-        board[row][col] = null;
+        const canWin = this.checkConnect4Winner(board, row, col, player);
+        board[row][col] = '';
         
         return canWin;
     }
 
     isColumnAvailable(board, col) {
-        return board[0][col] === null;
+        return board[0][col] === '';
     }
 
     async endConnect4Game(interaction, gameState, winner) {
-        // Implementation for ending Connect 4 game
-        await interaction.reply({ content: `Connect 4 game ended! Winner: ${winner}`, ephemeral: true });
+        let result = '';
+        let reward = 0;
+        let color = 0x4ecdc4;
+
+        if (winner === 'user') {
+            result = `🎉 **${gameState.username} wins!** 🔴`;
+            reward = gameState.bet * 2;
+            color = 0xff6b6b;
+            await this.economy.addMoney(gameState.userId, reward, 'Connect 4 win');
+            await this.economy.updateGameStats(gameState.userId, 'connect4', true);
+        } else if (winner === 'bot') {
+            result = `🤖 **Seedy Bot wins!** 🟡`;
+            color = 0xffd93d;
+            await this.economy.updateGameStats(gameState.userId, 'connect4', false);
+        } else {
+            result = `🤝 **It's a tie!**`;
+            reward = gameState.bet; // Return bet
+            color = 0x95a5a6;
+            if (gameState.bet > 0) {
+                await this.economy.addMoney(gameState.userId, reward, 'Connect 4 tie');
+            }
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('🔴🟡 Connect 4 Game - Finished!')
+            .setDescription(`${result}\n\n${gameState.bet > 0 ? `💰 **Reward:** ${this.economy.formatCurrency(reward)}` : '🎯 **Friendly Game**'}`)
+            .setColor(color)
+            .addFields({
+                name: '**🎮 Final Board**',
+                value: this.renderConnect4Board(gameState.board),
+                inline: false
+            })
+            .setThumbnail('https://i.imgur.com/ieP1fd5.jpeg')
+            .setTimestamp()
+            .setFooter({ text: 'Game Over • Powered by Seedy' });
+
+        await interaction.update({ embeds: [embed], components: [] });
+        // Find and delete the game from activeGames
+        for (const [id, state] of this.gameManager.activeGames.entries()) {
+            if (state.userId === gameState.userId && !state.gameOver) {
+                this.gameManager.activeGames.delete(id);
+                break;
+            }
+        }
     }
 
     async updateConnect4Display(interaction, gameState) {
-        // Implementation for updating Connect 4 display
-        await interaction.reply({ content: 'Connect 4 display updated!', ephemeral: true });
+        const embed = new EmbedBuilder()
+            .setTitle('🔴🟡 Connect 4 Game')
+            .setDescription(`**${gameState.username}** 🔴 vs **Seedy Bot** 🟡\n\n${gameState.bet > 0 ? `💰 **Bet:** ${this.economy.formatCurrency(gameState.bet)}` : '🎯 **Friendly Game**'}\n\n**Current Turn:** ${gameState.currentPlayer === 'R' ? `🔴 ${gameState.username}` : '🟡 Seedy Bot'}`)
+            .setColor(0x4ecdc4)
+            .addFields({
+                name: '**🎮 Game Board**',
+                value: this.renderConnect4Board(gameState.board),
+                inline: false
+            })
+            .setThumbnail('https://i.imgur.com/ieP1fd5.jpeg')
+            .setTimestamp()
+            .setFooter({ text: '🎯 Click a column number to drop your piece! • Powered by Seedy' });
+
+        // Find the game ID for this user
+        let gameId = null;
+        for (const [id, state] of this.gameManager.activeGames.entries()) {
+            if (state.userId === gameState.userId && !state.gameOver) {
+                gameId = id;
+                break;
+            }
+        }
+        
+        if (gameId) {
+            const interactionId = gameId.replace('c4_', '');
+            const buttons = this.createConnect4Buttons(gameState.board, interactionId);
+            await interaction.update({ embeds: [embed], components: buttons });
+        } else {
+            await interaction.update({ embeds: [embed], components: [] });
+        }
+    }
+
+    renderConnect4Board(board) {
+        let display = '```\n';
+        display += '  1   2   3   4   5   6   7\n';
+        display += '┌───┬───┬───┬───┬───┬───┬───┐\n';
+        
+        for (let row = 0; row < 6; row++) {
+            display += '│';
+            for (let col = 0; col < 7; col++) {
+                const cell = board[row][col];
+                if (cell === 'R') {
+                    display += ' 🔴 │';
+                } else if (cell === 'Y') {
+                    display += ' 🟡 │';
+                } else {
+                    display += '   │';
+                }
+            }
+            display += '\n';
+            if (row < 5) {
+                display += '├───┼───┼───┼───┼───┼───┼───┤\n';
+            }
+        }
+        
+        display += '└───┴───┴───┴───┴───┴───┴───┘\n';
+        display += '```';
+        
+        return display;
+    }
+
+    createConnect4Buttons(board, interactionId) {
+        const row = new ActionRowBuilder();
+        
+        for (let col = 0; col < 7; col++) {
+            const isFull = board[0][col] !== '';
+            const button = new ButtonBuilder()
+                .setCustomId(`c4_${interactionId}_${col}`)
+                .setLabel(`${col + 1}`)
+                .setStyle(isFull ? ButtonStyle.Danger : ButtonStyle.Primary)
+                .setDisabled(isFull)
+                .setEmoji(isFull ? '❌' : '⬇️');
+            
+            row.addComponents(button);
+        }
+
+        return [row];
     }
 
     cleanupExpiredGames() {
