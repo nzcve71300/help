@@ -37,7 +37,9 @@ module.exports = {
                 winner: null,
                 bet: betAmount,
                 userId: userId,
-                username: username
+                username: username,
+                createdAt: Date.now(),
+                lastActivity: Date.now()
             };
 
             // Store game state

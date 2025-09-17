@@ -26,6 +26,11 @@ class SeedyBot {
         this.commands = new Collection();
         this.cooldowns = new Collection();
         
+        // Game cleanup interval (clean up expired games every 5 minutes)
+        setInterval(() => {
+            this.cleanupExpiredGames();
+        }, 5 * 60 * 1000);
+        
         // Initialize services
         this.database = new DatabaseService();
         this.economy = new EconomyService(this.database);
@@ -609,12 +614,28 @@ class SeedyBot {
 
     async handleGameButton(interaction) {
         try {
-            const gameId = interaction.message.id;
-            const gameState = this.gameManager.activeGames.get(gameId);
+            // Try multiple ways to find the game
+            let gameState = null;
+            let gameId = null;
+
+            // Method 1: Try message ID
+            gameId = interaction.message.id;
+            gameState = this.gameManager.activeGames.get(gameId);
+
+            // Method 2: Try to find by user ID if message ID fails
+            if (!gameState) {
+                for (const [id, state] of this.gameManager.activeGames.entries()) {
+                    if (state.userId === interaction.user.id && !state.gameOver) {
+                        gameState = state;
+                        gameId = id;
+                        break;
+                    }
+                }
+            }
 
             if (!gameState) {
                 return interaction.reply({
-                    content: '❌ Game not found or has expired!',
+                    content: '❌ Game not found or has expired! Please start a new game with `/tictactoe`, `/connect4`, `/battleship`, `/rummy`, `/poker`, or `/uno`.',
                     ephemeral: true
                 });
             }
@@ -626,6 +647,9 @@ class SeedyBot {
                     ephemeral: true
                 });
             }
+
+            // Update last activity timestamp
+            gameState.lastActivity = Date.now();
 
             // Handle different game types
             if (interaction.customId.startsWith('ttt_')) {
@@ -772,7 +796,7 @@ class SeedyBot {
             .setFooter({ text: 'Game Over • Powered by Seedy' });
 
         await interaction.update({ embeds: [embed], components: [] });
-        this.gameManager.activeGames.delete(interaction.message.id);
+        this.gameManager.activeGames.delete(gameId);
     }
 
     async updateTicTacToeDisplay(interaction, gameState) {
@@ -852,6 +876,18 @@ class SeedyBot {
     async handleUnoButton(interaction, gameState) {
         // Implementation for Uno
         await interaction.reply({ content: 'Uno button handling - Coming soon!', ephemeral: true });
+    }
+
+    cleanupExpiredGames() {
+        const now = Date.now();
+        const maxInactivity = 15 * 60 * 1000; // 15 minutes of inactivity
+
+        for (const [gameId, gameState] of this.gameManager.activeGames.entries()) {
+            if (gameState.lastActivity && (now - gameState.lastActivity) > maxInactivity) {
+                console.log(`Cleaning up inactive game: ${gameId}`);
+                this.gameManager.activeGames.delete(gameId);
+            }
+        }
     }
 
     async start() {
