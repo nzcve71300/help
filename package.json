@@ -25,7 +25,7 @@
   "homepage": "https://github.com/nzcve71300/seedyy#readme",
   "dependencies": {
     "bad-words": "^3.0.4",
-    "discord.js": "^14.22.1",
+    "discord.js": "^14.14.1",
     "dotenv": "^16.3.1",
     "node-cron": "^3.0.3",
     "sqlite3": "^5.1.6"
