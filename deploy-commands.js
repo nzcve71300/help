@@ -10,13 +10,17 @@ const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('
 // Load all command files
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
-    const command = require(filePath);
-    
-    if ('data' in command && 'execute' in command) {
-        commands.push(command.data.toJSON());
-        console.log(`✅ Loaded command: ${command.data.name}`);
-    } else {
-        console.log(`⚠️ Command at ${filePath} is missing required "data" or "execute" property.`);
+    try {
+        const command = require(filePath);
+        
+        if ('data' in command && 'execute' in command) {
+            commands.push(command.data.toJSON());
+            console.log(`✅ Loaded command: ${command.data.name}`);
+        } else {
+            console.log(`⚠️ Command at ${filePath} is missing required "data" or "execute" property.`);
+        }
+    } catch (error) {
+        console.log(`❌ Failed to load command ${file}:`, error.message);
     }
 }
 
