@@ -10,7 +10,7 @@ class ServerService {
     async initializeDatabase() {
         try {
             // Create servers table if it doesn't exist
-            await this.database.query(`
+            await this.database.run(`
                 CREATE TABLE IF NOT EXISTS servers (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     server_name TEXT NOT NULL,
@@ -36,7 +36,7 @@ class ServerService {
 
     async loadServers() {
         try {
-            const servers = await this.database.query('SELECT * FROM servers ORDER BY server_name');
+            const servers = await this.database.all('SELECT * FROM servers ORDER BY server_name');
             this.servers.clear();
             
             servers.forEach(server => {
@@ -69,7 +69,7 @@ class ServerService {
             }
 
             // Insert into database
-            const result = await this.database.query(`
+            const result = await this.database.run(`
                 INSERT INTO servers (server_name, server_id, server_type, game_type, team_size, last_wipe, next_wipe, bp_wipe)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `, [serverName, serverId, serverType, gameType, teamSize, lastWipe, nextWipe, bpWipe]);
@@ -105,7 +105,7 @@ class ServerService {
             }
 
             // Delete from database
-            await this.database.query('DELETE FROM servers WHERE server_name = ?', [serverName]);
+            await this.database.run('DELETE FROM servers WHERE server_name = ?', [serverName]);
             
             // Remove from in-memory storage
             this.servers.delete(serverName);
@@ -127,7 +127,7 @@ class ServerService {
             const updatedServer = { ...currentServer, ...updates, updated_at: new Date().toISOString() };
 
             // Update database
-            await this.database.query(`
+            await this.database.run(`
                 UPDATE servers 
                 SET server_name = ?, server_id = ?, server_type = ?, game_type = ?, 
                     team_size = ?, last_wipe = ?, next_wipe = ?, bp_wipe = ?, updated_at = ?
