@@ -42,6 +42,14 @@ module.exports = {
 
     async execute(interaction, bot) {
         try {
+            // Check if ServerService is available
+            if (!bot.serverService) {
+                return interaction.reply({
+                    content: '❌ ServerService is not available. Please try again in a moment.',
+                    ephemeral: true
+                });
+            }
+
             const channel = interaction.options.getChannel('channel');
             const embedColor = parseInt(interaction.options.getString('embed_color'));
             const text = interaction.options.getString('text');
@@ -91,8 +99,10 @@ module.exports = {
 
         } catch (error) {
             console.error('Error in send-server-msg command:', error);
+            console.error('Error details:', error.message);
+            console.error('Error stack:', error.stack);
             await interaction.reply({
-                content: '❌ There was an error sending the server message!',
+                content: `❌ There was an error sending the server message!\n\n**Error:** ${error.message}`,
                 ephemeral: true
             });
         }
