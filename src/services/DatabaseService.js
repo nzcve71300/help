@@ -1,161 +1,193 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const mysql = require('mysql2/promise');
+require('dotenv').config();
 
 class DatabaseService {
     constructor() {
-        this.db = null;
-        this.dbPath = path.join(__dirname, '../../data/seedy.db');
+        this.connection = null;
+        this.config = {
+            host: process.env.DB_HOST || 'localhost',
+            port: process.env.DB_PORT || 3306,
+            user: process.env.DB_USER || 'seedy_bot',
+            password: process.env.DB_PASSWORD,
+            database: process.env.DB_NAME || 'seedy_discord_bot',
+            charset: 'utf8mb4',
+            timezone: '+00:00'
+        };
     }
 
     async initialize() {
-        return new Promise((resolve, reject) => {
-            // Ensure data directory exists
-            const fs = require('fs');
-            const dataDir = path.dirname(this.dbPath);
-            if (!fs.existsSync(dataDir)) {
-                fs.mkdirSync(dataDir, { recursive: true });
-            }
+        try {
+            // First connect without database to create it if it doesn't exist
+            const tempConfig = { ...this.config };
+            delete tempConfig.database;
+            
+            const tempConnection = await mysql.createConnection(tempConfig);
+            
+            // Create database if it doesn't exist
+            await tempConnection.execute(`CREATE DATABASE IF NOT EXISTS \`${this.config.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+            await tempConnection.end();
 
-            this.db = new sqlite3.Database(this.dbPath, (err) => {
-                if (err) {
-                    console.error('Error opening database:', err);
-                    reject(err);
-                } else {
-                    console.log('✅ Connected to SQLite database');
-                    this.createTables().then(resolve).catch(reject);
-                }
-            });
-        });
+            // Now connect to the specific database
+            this.connection = await mysql.createConnection(this.config);
+            console.log('✅ Connected to MariaDB database');
+            
+            await this.createTables();
+        } catch (error) {
+            console.error('Error connecting to MariaDB:', error);
+            throw error;
+        }
     }
 
     async createTables() {
         const tables = [
             // Economy tables
             `CREATE TABLE IF NOT EXISTS users (
-                user_id TEXT PRIMARY KEY,
-                username TEXT,
-                balance INTEGER DEFAULT 1000,
-                daily_streak INTEGER DEFAULT 0,
-                last_daily TEXT,
-                total_earned INTEGER DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`,
+                user_id VARCHAR(20) PRIMARY KEY,
+                username VARCHAR(255),
+                balance INT DEFAULT 1000,
+                daily_streak INT DEFAULT 0,
+                last_daily DATETIME NULL,
+                total_earned INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
             
             `CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT,
-                amount INTEGER,
-                type TEXT,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(20),
+                amount INT,
+                type VARCHAR(50),
                 description TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users (user_id)
-            )`,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
             // Survey tables
             `CREATE TABLE IF NOT EXISTS survey_config (
-                guild_id TEXT PRIMARY KEY,
-                survey_channel_id TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`,
+                guild_id VARCHAR(20) PRIMARY KEY,
+                survey_channel_id VARCHAR(20),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
             `CREATE TABLE IF NOT EXISTS survey_responses (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                survey_id TEXT,
-                user_id TEXT,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                survey_id VARCHAR(50),
+                user_id VARCHAR(20),
                 question1 TEXT,
                 question2 TEXT,
                 question3 TEXT,
                 question4 TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
             // Game tables
             `CREATE TABLE IF NOT EXISTS game_stats (
-                user_id TEXT PRIMARY KEY,
-                hangman_wins INTEGER DEFAULT 0,
-                hangman_losses INTEGER DEFAULT 0,
-                rummy_wins INTEGER DEFAULT 0,
-                rummy_losses INTEGER DEFAULT 0,
-                tictactoe_wins INTEGER DEFAULT 0,
-                tictactoe_losses INTEGER DEFAULT 0,
-                connect4_wins INTEGER DEFAULT 0,
-                connect4_losses INTEGER DEFAULT 0,
-                battleship_wins INTEGER DEFAULT 0,
-                battleship_losses INTEGER DEFAULT 0,
-                poker_wins INTEGER DEFAULT 0,
-                poker_losses INTEGER DEFAULT 0,
-                uno_wins INTEGER DEFAULT 0,
-                uno_losses INTEGER DEFAULT 0,
-                total_games INTEGER DEFAULT 0,
-                FOREIGN KEY (user_id) REFERENCES users (user_id)
-            )`,
+                user_id VARCHAR(20) PRIMARY KEY,
+                hangman_wins INT DEFAULT 0,
+                hangman_losses INT DEFAULT 0,
+                rummy_wins INT DEFAULT 0,
+                rummy_losses INT DEFAULT 0,
+                tictactoe_wins INT DEFAULT 0,
+                tictactoe_losses INT DEFAULT 0,
+                connect4_wins INT DEFAULT 0,
+                connect4_losses INT DEFAULT 0,
+                battleship_wins INT DEFAULT 0,
+                battleship_losses INT DEFAULT 0,
+                poker_wins INT DEFAULT 0,
+                poker_losses INT DEFAULT 0,
+                uno_wins INT DEFAULT 0,
+                uno_losses INT DEFAULT 0,
+                total_games INT DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
             // Moderation tables
             `CREATE TABLE IF NOT EXISTS warnings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT,
-                moderator_id TEXT,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(20),
+                moderator_id VARCHAR(20),
                 reason TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )`
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+            // Partners table for website integration
+            `CREATE TABLE IF NOT EXISTS partners (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                description TEXT NOT NULL,
+                website VARCHAR(500) NOT NULL,
+                logo VARCHAR(500) NULL,
+                discord VARCHAR(500) NULL,
+                type ENUM('bot', 'server', 'tool', 'service') DEFAULT 'service',
+                status ENUM('active', 'inactive') DEFAULT 'active',
+                featured BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
         ];
 
         for (const table of tables) {
-            await this.run(table);
+            await this.execute(table);
         }
     }
 
-    run(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            this.db.run(sql, params, function(err) {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve({ id: this.lastID, changes: this.changes });
-                }
-            });
-        });
+    async execute(sql, params = []) {
+        try {
+            const [rows] = await this.connection.execute(sql, params);
+            return rows;
+        } catch (error) {
+            console.error('Database query error:', error);
+            throw error;
+        }
     }
 
-    get(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            this.db.get(sql, params, (err, row) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(row);
-                }
-            });
-        });
+    async query(sql, params = []) {
+        try {
+            const [rows] = await this.connection.query(sql, params);
+            return rows;
+        } catch (error) {
+            console.error('Database query error:', error);
+            throw error;
+        }
     }
 
-    all(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            this.db.all(sql, params, (err, rows) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(rows);
-                }
-            });
-        });
+    async get(sql, params = []) {
+        try {
+            const [rows] = await this.connection.execute(sql, params);
+            return rows[0] || null;
+        } catch (error) {
+            console.error('Database query error:', error);
+            throw error;
+        }
+    }
+
+    async all(sql, params = []) {
+        try {
+            const [rows] = await this.connection.execute(sql, params);
+            return rows;
+        } catch (error) {
+            console.error('Database query error:', error);
+            throw error;
+        }
+    }
+
+    async run(sql, params = []) {
+        try {
+            const [result] = await this.connection.execute(sql, params);
+            return {
+                id: result.insertId,
+                changes: result.affectedRows
+            };
+        } catch (error) {
+            console.error('Database query error:', error);
+            throw error;
+        }
     }
 
     async close() {
-        return new Promise((resolve) => {
-            if (this.db) {
-                this.db.close((err) => {
-                    if (err) {
-                        console.error('Error closing database:', err);
-                    } else {
-                        console.log('Database connection closed');
-                    }
-                    resolve();
-                });
-            } else {
-                resolve();
-            }
-        });
+        if (this.connection) {
+            await this.connection.end();
+            console.log('Database connection closed');
+        }
     }
 }
 

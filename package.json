@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "api": "node api/server.js",
     "deploy": "node deploy-commands.js",
     "test": "jest"
   },
@@ -28,7 +29,12 @@
     "discord.js": "^14.14.1",
     "dotenv": "^16.3.1",
     "node-cron": "^3.0.3",
-    "sqlite3": "^5.1.6"
+    "mysql2": "^3.6.5",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "express-rate-limit": "^7.1.5"
   },
   "devDependencies": {
     "jest": "^29.7.0",

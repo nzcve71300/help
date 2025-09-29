@@ -1,161 +1,166 @@
-# 🌱 Seedy Discord Bot
+# Seedy Discord Bot
 
-A comprehensive Discord bot with economy system, mini-games, moderation, surveys, and AI features.
+A comprehensive Discord bot with games, moderation, economy features, and website integration.
 
 ## Features
 
-### 🎮 Mini Games
-- **Hangman**: Word guessing game with rewards
-- **Economy System**: Earn seeds through games and daily rewards
-- **Leaderboards**: Track top players
+- 🎮 **Games**: Hangman, Tic-tac-toe, Connect 4, Battleship, Poker, Rummy, UNO
+- 💰 **Economy**: Daily rewards, balance tracking, transactions
+- 🛡️ **Moderation**: Warnings, profanity filter, invite blocking
+- 📊 **Surveys**: Custom survey system with responses
+- 🌐 **API**: REST API for website integration
+- 🗄️ **Database**: MariaDB with full CRUD operations
 
-### 🛡️ Moderation
-- **Automatic Profanity Detection**: Filters inappropriate language
-- **Warning System**: Issues warnings with custom image
-- **Message Deletion**: Removes inappropriate messages automatically
-- **Role-Based Permissions**: SeedyAdmin role for admin commands
+## Prerequisites
 
-### 📋 Survey System
-- **Interactive Surveys**: Create surveys with 4 questions
-- **Modal Responses**: Users fill out forms to submit answers
-- **Channel Logging**: All responses sent to designated channel
+- Node.js 16+ 
+- MariaDB 10.3+
+- PM2 (for production)
 
-### 🌱 ZORP Monitoring
-- **Keyword Detection**: Monitors for ZORP-related messages
-- **Auto-Response**: Provides helpful information and channel redirects
-- **Support Integration**: Directs users to support channels
+## Installation
 
-### 💰 Economy Features
-- **Daily Rewards**: Claim daily seeds with streak bonuses
-- **Game Rewards**: Earn seeds by playing games
-- **Transaction History**: Track all earnings and spending
-- **Balance System**: Check your seed balance anytime
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/seedy-discord-bot.git
+   cd seedy-discord-bot
+   ```
 
-### 🔐 Permission System
-- **SeedyAdmin Role**: Automatically created when bot joins server
-- **Economy Commands**: Available to everyone
-- **Admin Commands**: Restricted to SeedyAdmin role members
-
-## Setup
-
-1. **Install Dependencies**
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. **Configure Environment**
-   - Copy `config.example.env` to `.env`
-   - Fill in your Discord bot token and other settings
-
-3. **Required Environment Variables**
-   ```
-   DISCORD_TOKEN=your_discord_bot_token
-   CLIENT_ID=your_discord_client_id
-   GUILD_ID=your_discord_server_id
-   ```
-
-4. **Deploy Commands**
+3. **Set up MariaDB**
    ```bash
-   npm run deploy
+   # Install MariaDB (Ubuntu/Debian)
+   sudo apt update
+   sudo apt install mariadb-server mariadb-client
+   
+   # Start and enable MariaDB
+   sudo systemctl start mariadb
+   sudo systemctl enable mariadb
+   
+   # Secure installation
+   sudo mysql_secure_installation
    ```
 
-5. **Start the Bot**
+4. **Create database and user**
+   ```sql
+   CREATE DATABASE seedy_discord_bot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+   CREATE USER 'seedy_bot'@'localhost' IDENTIFIED BY 'your_secure_password';
+   GRANT ALL PRIVILEGES ON seedy_discord_bot.* TO 'seedy_bot'@'localhost';
+   FLUSH PRIVILEGES;
+   ```
+
+5. **Configure environment**
    ```bash
-   npm start
+   cp env.example .env
+   # Edit .env with your configuration
    ```
 
-## Commands
-
-### Economy Commands (Everyone can use)
-- `/balance` - Check your seed balance
-- `/daily` - Claim daily reward
-- `/leaderboard` - View top players
-- `/hangman` - Start/play Hangman game
-- `/hangman <letter>` - Guess a letter in Hangman
-
-### Admin Commands (SeedyAdmin role required)
-- `/survey <q1> <q2> <q3> <q4>` - Create a survey
-- `/setup-survey <channel>` - Set survey response channel
-- `/warnings <user>` - Check user warnings
-- `/clear-warnings <user>` - Clear user warnings
+6. **Install PM2 globally**
+   ```bash
+   npm install -g pm2
+   ```
 
 ## Configuration
 
-### Server Restriction
-The bot is restricted to only work on server ID: `1412842631561613375`
-- If someone tries to add the bot to another server, it will automatically leave
-- All commands and features only work on the authorized server
+Edit the `.env` file with your settings:
 
-### Channel IDs
-The bot uses these hardcoded channel IDs:
-- **ZORP Channel**: `1387306698192064554`
-- **Support Channel**: `1360485036973097224`
+```env
+# Discord Bot Configuration
+DISCORD_TOKEN=your_discord_bot_token_here
+CLIENT_ID=your_discord_client_id_here
+GUILD_ID=your_guild_id_here
 
-### Images
-- **Warning Image**: `https://i.imgur.com/xxdt9Ww.png` (attached to moderation warnings)
-- **ZORP Image**: `https://i.imgur.com/O8xh49D.png` (attached to ZORP information responses)
+# MariaDB Configuration
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=seedy_bot
+DB_PASSWORD=your_secure_password_here
+DB_NAME=seedy_discord_bot
 
-## Database
+# API Configuration
+API_PORT=3001
+WEBSITE_URL=http://localhost:5173
+```
 
-The bot uses SQLite database with the following tables:
+## Running the Bot
+
+### Development
+```bash
+# Run Discord bot only
+npm run dev
+
+# Run API server only
+npm run api
+```
+
+### Production
+```bash
+# Start both services with PM2
+pm2 start ecosystem.config.js
+
+# View logs
+pm2 logs
+
+# Monitor
+pm2 monit
+
+# Restart services
+pm2 restart all
+```
+
+## API Endpoints
+
+The bot includes a REST API for website integration:
+
+### Partners Management
+- `GET /api/partners` - Get all partners
+- `GET /api/partners/:id` - Get specific partner
+- `POST /api/partners` - Create new partner
+- `PUT /api/partners/:id` - Update partner
+- `DELETE /api/partners/:id` - Delete partner
+
+### Health Check
+- `GET /health` - API health status
+
+## Database Schema
+
+The bot automatically creates the following tables:
 - `users` - User economy data
 - `transactions` - Transaction history
-- `survey_config` - Survey channel configuration
-- `survey_responses` - Survey response data
 - `game_stats` - Game statistics
 - `warnings` - Moderation warnings
+- `survey_config` - Survey configuration
+- `survey_responses` - Survey responses
+- `partners` - Partner management (for website)
 
-## Features in Detail
+## Discord Commands
 
-### Economy System
-- New users start with 1000 seeds
-- Daily rewards: 100 base + streak bonus (max 200)
-- Game rewards: 50 seeds per win
-- Transaction logging for all activities
+- `/ping` - Test bot latency
+- `/dbtest` - Test database connection
+- `/balance` - Check user balance
+- `/daily` - Claim daily reward
+- `/leaderboard` - View economy leaderboard
+- And many more game commands...
 
-### Moderation System
-- Automatic detection of inappropriate language
-- Deletes inappropriate messages
-- Sends warning embeds with custom image
-- Logs warnings to database
-- Sends DM notifications to users
+## Website Integration
 
-### Survey System
-- Interactive button-based surveys
-- Modal forms for responses
-- Automatic logging to designated channel
-- Admin-only setup commands
+The bot provides a REST API that can be consumed by your website for real-time data synchronization. The API includes CORS support and rate limiting for security.
 
-### ZORP Monitoring
-- Monitors all messages for ZORP keywords
-- Provides helpful information and channel redirects
-- Integrates with support system
+## Contributing
 
-## Development
-
-### Project Structure
-```
-src/
-├── commands/          # Slash commands
-├── services/          # Core bot services
-│   ├── AIService.js
-│   ├── DatabaseService.js
-│   ├── EconomyService.js
-│   ├── ModerationService.js
-│   └── SurveyManager.js
-└── index.js          # Main bot file
-```
-
-### Adding New Features
-1. Create new service in `src/services/`
-2. Add commands in `src/commands/`
-3. Update database schema if needed
-4. Test thoroughly before deployment
-
-## Support
-
-For support or questions about ZORP, the bot will automatically detect mentions and provide helpful information with channel redirects.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## License
 
-MIT License - feel free to modify and use for your own projects!
+MIT License - see LICENSE file for details.
+
+## Support
+
+For support, please open an issue on GitHub or contact the development team.
